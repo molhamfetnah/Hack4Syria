@@ -59,21 +59,52 @@ else:
 
 client = OpenAI(api_key=openai_api_key)
 
-user_message_with_instructions = [
+conversation = [
     {
-        "role": "system",
+        "role":"system",
         "content": instruction("patient_interaction")
-    },
-    {
-        "role": "user",
-        "content" : "I've been experiencing frequent headaches and blurred vision. What might be causing these symptoms?"
     }
 ]
 
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=user_message_with_instructions
-)
+logging.info("Doctor AI is ready. Type 'exit' to quit the chat.")
+print("Doctor AI is ready. Type 'exit' to quit the chat.") # replace with the endpoint
 
-print(response.choices[0].message.content)
+# user input test
+# I've been experiencing frequent headaches and blurred vision. What might be causing these symptoms?
 
+# start an interactive chat loop
+while True:
+    # get user input
+    user_input = input("You: ")
+    if user_input.lower() in ['exit', 'quit']:
+        logging.info("Exiting chat. Stay healthy!")
+        print("Exiting chat. Stay healthy!")
+        break
+
+    # append user message to conversation history
+    conversation.append(
+        {
+            "role": "user",
+            "content": user_input
+        }
+    )
+
+    # get the assitant response using the full conversation history
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=conversation
+        )
+        assistat_replay = response.choices[0].message.content.strip()
+        print(f"Doctor AI: {assistat_replay}")
+
+        # append assistant replay to conversation history
+        conversation.append(
+            {
+                "role": "assistant", 
+                "content": assistat_replay
+            }
+        )
+    except Exception as e:
+        logging.error(f"An error occured: {e}")
+        print("Sorry, something went wrong. please try again")
