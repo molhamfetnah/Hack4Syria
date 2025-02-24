@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Medical Chat Interface</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #chatLog { border: 1px solid #ccc; padding: 20px; height: 500px; overflow-y: auto; margin-bottom: 20px; }
+        .user { color: #0066cc; margin: 5px 0; }
+        .assistant { color: #009933; margin: 5px 0; }
+        .error { color: #cc0000; margin: 5px 0; }
+        input { width: 70%; padding: 10px; margin-right: 10px; }
+        button { padding: 10px 20px; background: #0066cc; color: white; border: none; cursor: pointer; }
+        .loading-dots::after {
+            content: '.';
+            animation: dots 1s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
+        }
+    </style>
+</head>
+<body>
+    <div id="chatLog"></div>
+    <input type="text" id="userInput" placeholder="Describe your symptoms...">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        let sessionId = null;
+        const BACKEND_URL = 'http://localhost:5000'; // Update if your backend uses different URL
+
+        // Error display function
+        function showError(message) {
+            const chatLog = document.getElementById('chatLog');
+            const div = document.createElement('div');
+            div.className = 'error';
+            div.innerHTML = `<strong>Error:</strong> ${message}`;
+            chatLog.appendChild(div);
+        }
+
+        // Initialize session when page loads
+        async function initializeSession() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/start_session`, { 
+                    method: 'POST' 
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                sessionId = data.session_id;
+            } catch (error) {
+                console.error('Error starting session:', error);
+                showError('Failed to initialize chat session. Please refresh the page.');
+            }
+        }
+
+        function displayMessage(role, text) {
+            const chatLog = document.getElementById('chatLog');
+            const div = document.createElement('div');
+            div.className = role;
+            div.innerHTML = `<strong>${role === 'user' ? 'You' : 'Doctor'}:</strong> ${text}`;
+            chatLog.appendChild(div);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            return div;
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // Display user message immediately
+            displayMessage('user', message);
+            userInput.value = '';
+            
+            // Disable input during processing
+            userInput.disabled = true;
+            document.querySelector('button').disabled = true;
+            
+            // Show animated loading indicator
+            const loadingDiv = displayMessage('assistant', 
+                '<em>Analyzing symptoms<span class="loading-dots"></span></em>'
+            );
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        user_input: message
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Request failed');
+                }
+
+                const data = await response.json();
+                loadingDiv.innerHTML = `<strong>Doctor:</strong> ${data.response}`;
+            } catch (error) {
+                console.error('Error:', error);
+                const errorMessage = error.message.includes('Failed to fetch') 
+                    ? 'Cannot connect to the medical server. Please check your connection.'
+                    : error.message;
+                loadingDiv.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
+            } finally {
+                userInput.disabled = false;
+                document.querySelector('button').disabled = false;
+                userInput.focus();
+            }
+        }
+
+        // Handle Enter key
+        document.getElementById('userInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Initialize session when page loads
+        initializeSession();
+    </script>
+</body>
+</html>
