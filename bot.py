@@ -2,6 +2,22 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import logging
+from flask import Flask, request, jsonify
+import uuid
+from flask_cors import CORS
+
+load_dotenv(dotenv_path="./.gitignore/key.env", override=True)
+openai_api_key = os.getenv('API_KEY')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS for cross-domain requests
+
+client = OpenAI(api_key=openai_api_key)
+
+# In-memory storage for conversations (use a database in production)
+sessions = {}
 
 def instruction(model):
     instruc = ""
@@ -42,69 +58,42 @@ def instruction(model):
         )
     return instruc
 
+@app.route('/start_session', methods=['POST'])
+def start_session():
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = [
+        {"role": "system", "content": instruction("patient_interaction")}
+    ]
+    return jsonify({"session_id": session_id})
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+@app.route('/chat', methods=['POST'])
+def handle_chat():
+    data = request.get_json()
+    session_id = data.get('session_id')
+    user_input = data.get('user_input')
 
+    if not session_id or not user_input:
+        return jsonify({"error": "Missing parameters"}), 400
 
-# load variables from .env file into the environment
-load_dotenv(dotenv_path="./.gitignore/key.env",override=True)
+    conversation = sessions.get(session_id)
+    if not conversation:
+        return jsonify({"error": "Invalid session ID"}), 404
 
-# retieve the API_KEY
-openai_api_key = os.getenv('API_KEY')
+    conversation.append({"role": "user", "content": user_input})
 
-if openai_api_key:
-    logging.info("API key loaded successfully")
-else:
-    logging.error("API key not found, check your .env file")
-
-client = OpenAI(api_key=openai_api_key)
-
-conversation = [
-    {
-        "role":"system",
-        "content": instruction("patient_interaction")
-    }
-]
-
-logging.info("Doctor AI is ready. Type 'exit' to quit the chat.")
-print("Doctor AI is ready. Type 'exit' to quit the chat.") # replace with the endpoint
-
-# user input test
-# I've been experiencing frequent headaches and blurred vision. What might be causing these symptoms?
-
-# start an interactive chat loop
-while True:
-    # get user input
-    user_input = input("You: ")
-    if user_input.lower() in ['exit', 'quit']:
-        logging.info("Exiting chat. Stay healthy!")
-        print("Exiting chat. Stay healthy!")
-        break
-
-    # append user message to conversation history
-    conversation.append(
-        {
-            "role": "user",
-            "content": user_input
-        }
-    )
-
-    # get the assitant response using the full conversation history
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=conversation
+            messages=conversation,
         )
-        assistat_replay = response.choices[0].message.content.strip()
-        print(f"Doctor AI: {assistat_replay}")
-
-        # append assistant replay to conversation history
-        conversation.append(
-            {
-                "role": "assistant", 
-                "content": assistat_replay
-            }
-        )
+        assistant_reply = response.choices[0].message.content.strip()
+        conversation.append({"role": "assistant", "content": assistant_reply})
+        sessions[session_id] = conversation
+        
+        return jsonify({"response": assistant_reply})
     except Exception as e:
-        logging.error(f"An error occured: {e}")
-        print("Sorry, something went wrong. please try again")
+        logging.error(f"Error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
