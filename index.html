@@ -20,18 +20,39 @@
             60% { content: '...'; }
             80%, 100% { content: ''; }
         }
+        /* Added model selector styles */
+        #modelSelector { margin-bottom: 15px; padding: 8px; width: 250px; }
+        .model-info { color: #666; font-size: 0.9em; margin-top: 5px; }
     </style>
 </head>
 <body>
+    <!-- Added model selector -->
+    <select id="modelSelector" onchange="handleModelChange()">
+        <option value="patient_interaction">Symptom Collector</option>
+        <option value="triage_tool">Emergency Triage</option>
+        <option value="ai_specialist_agents">Medical Specialist</option>
+        <option value="nlp">Notes Analysis</option>
+        <option value="iehs">Hospital Integration</option>
+    </select>
+    <div class="model-info" id="modelDescription"></div>
+    
     <div id="chatLog"></div>
     <input type="text" id="userInput" placeholder="Describe your symptoms...">
     <button onclick="sendMessage()">Send</button>
 
     <script>
         let sessionId = null;
-        const BACKEND_URL = 'http://localhost:5000'; // Update if your backend uses different URL
+        const BACKEND_URL = 'http://localhost:5000';
+        
+        // Model descriptions
+        const modelDescriptions = {
+            patient_interaction: "Chatbot to collect patient symptoms and medical history",
+            triage_tool: "Prioritize medical cases by urgency level",
+            ai_specialist_agents: "Consult with specific medical specialists",
+            nlp: "Analyze and summarize medical notes",
+            iehs: "Integrate with hospital EMR systems"
+        };
 
-        // Error display function
         function showError(message) {
             const chatLog = document.getElementById('chatLog');
             const div = document.createElement('div');
@@ -40,19 +61,40 @@
             chatLog.appendChild(div);
         }
 
-        // Initialize session when page loads
+        function handleModelChange() {
+            const selector = document.getElementById('modelSelector');
+            const description = document.getElementById('modelDescription');
+            description.textContent = modelDescriptions[selector.value];
+            
+            if(sessionId) {
+                if(confirm("Changing models will reset the conversation. Continue?")) {
+                    resetConversation();
+                } else {
+                    selector.value = Object.keys(modelDescriptions).find(key => modelDescriptions[key] === description.textContent);
+                }
+            }
+        }
+
+        function resetConversation() {
+            sessionId = null;
+            document.getElementById('chatLog').innerHTML = '';
+            initializeSession();
+        }
+
         async function initializeSession() {
             try {
-                const response = await fetch(`${BACKEND_URL}/start_session`, { 
-                    method: 'POST' 
+                const model = document.getElementById('modelSelector').value;
+                const response = await fetch(`${BACKEND_URL}/start_session`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ model: model })
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 
                 const data = await response.json();
                 sessionId = data.session_id;
+                document.getElementById('modelDescription').textContent = modelDescriptions[model];
             } catch (error) {
                 console.error('Error starting session:', error);
                 showError('Failed to initialize chat session. Please refresh the page.');
@@ -74,15 +116,12 @@
             const message = userInput.value.trim();
             if (!message) return;
 
-            // Display user message immediately
             displayMessage('user', message);
             userInput.value = '';
             
-            // Disable input during processing
             userInput.disabled = true;
             document.querySelector('button').disabled = true;
             
-            // Show animated loading indicator
             const loadingDiv = displayMessage('assistant', 
                 '<em>Analyzing symptoms<span class="loading-dots"></span></em>'
             );
@@ -90,13 +129,8 @@
             try {
                 const response = await fetch(`${BACKEND_URL}/chat`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        user_input: message
-                    }),
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ session_id: sessionId, user_input: message })
                 });
 
                 if (!response.ok) {
@@ -119,12 +153,12 @@
             }
         }
 
-        // Handle Enter key
         document.getElementById('userInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // Initialize session when page loads
+        // Initialize with default model description
+        document.getElementById('modelDescription').textContent = modelDescriptions['patient_interaction'];
         initializeSession();
     </script>
 </body>

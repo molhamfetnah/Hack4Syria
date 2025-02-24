@@ -60,11 +60,13 @@ def instruction(model):
 
 @app.route('/start_session', methods=['POST'])
 def start_session():
+    data = request.get_json()
+    model = data.get('model', 'patient_interaction') # Defualt model
     session_id = str(uuid.uuid4())
     sessions[session_id] = [
-        {"role": "system", "content": instruction("patient_interaction")}
+        {"role": "system", "content": instruction(model)}
     ]
-    return jsonify({"session_id": session_id})
+    return jsonify({"session_id": session_id, "selected_model" : model})
 
 @app.route('/chat', methods=['POST'])
 def handle_chat():
