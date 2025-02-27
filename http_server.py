@@ -13,4 +13,4 @@ def serve_frontend():
     return send_from_directory(FRONTEND_FOLDER, 'index.html')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3000)  # Different port from your backend
+    app.run(host='0.0.0.0')  # Different port from your backend
